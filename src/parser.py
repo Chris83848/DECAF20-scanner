@@ -230,8 +230,7 @@ class Parser:
 
         # Parse If statement, indicated by token type
         if token.type == "T_If":
-            self.parse_if()
-            return
+            return self.parse_if()
 
         # Parse While statement, indicated by token type
         if token.type == "T_While":
@@ -339,21 +338,32 @@ class Parser:
 
     # Parse If statements
     def parse_if(self):
+        token = self.current_token()
+
+        # Create the if statement node
+        statement = ParseTreeNode("IfStmt:", token.line)
+
         # Consume keyword
         self.advance_token()
 
         # Require opening and closing parenthesis, and parse expression inside
         self.expect_value("(")
-        self.parse_expression()
+        condition = self.parse_expression()
+        if condition is not None:
+            statement.add_child(condition)
         self.expect_value(")")
 
         # Parse body
-        self.parse_block()
+        body = self.parse_block()
+        statement.add_child(body)
 
         # Check for else statement and parse it
         if self.current_token() is not None and self.current_token().type == "T_Else":
             self.advance_token()
-            self.parse_block()
+            else_body = self.parse_block()
+            statement.add_child(else_body)
+
+        return statement
 
     # Parse While statements
     def parse_while(self):
