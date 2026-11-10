@@ -289,9 +289,11 @@ class Parser:
 
             # Parse function call
             if self.current_token() is not None and self.current_token().value == "(":
-                self.parse_call_arguments()
+                call = ParseTreeNode(f"Call: {name_token.value}", name_token.line)
+                arguments = self.parse_call_arguments()
+                call.add_child(arguments)
                 self.expect_value(";")
-                return
+                return call
 
             # Create the assignment expression node
             statement = ParseTreeNode("AssignExpr:", token.line)
