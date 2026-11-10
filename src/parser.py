@@ -11,6 +11,26 @@ PRECEDENCE = {
     "*": 6, "/": 6, "%": 6
 }
 
+class ParseTreeNode:
+    def __init__(self, label, line=None):
+        self.label = label
+        self.line = line
+        self.children = []
+
+    def add_child(self, child):
+        self.children.append(child)
+
+    def print_tree(self, depth=0):
+        indentation = "\t" * depth
+
+        if self.line is not None:
+            print(f"{self.line} \t {indentation}{self.label}")
+        else:
+            print(f"\t {indentation}{self.label}")
+
+        for child in self.children:
+            child.print_tree(depth + 1)
+
 # Initialize Parser class to keep track of tokens list, source lines, current list position, and any error tokens
 class Parser:
     def __init__(self, tokens, source_lines):
@@ -18,12 +38,16 @@ class Parser:
         self.source_lines = source_lines
         self.position = 0
         self.error_token = None
+        self.root = ParseTreeNode("Program:")
 
     # Begin parsing the program declaration by declaration until the end is reached
     def parse_program(self):
         while self.current_token() is not None:
-            self.parse_declaration()
+            declaration = self.parse_declaration()
+            if declaration is not None:
+                self.root.add_child(declaration)
         print("Parsing completed successfully.")
+        return self.root
 
     # Distinguish between function and variable declarations
     def parse_declaration(self):
@@ -35,75 +59,91 @@ class Parser:
         if token is None or token.type not in valid_types:
             self.syntax_error()
 
+        line = token.line
+
         # Consume token
-        token_type = self.advance_token()
+        self.advance_token()
 
         # Check identifier to match correctly then consume it
         identifier = self.current_token()
-        if identifier is None or identifier.type != "T_IDENTIFIER":
-            self.syntax_error()
-        identifier = self.advance_token()
 
-        # Parse a function declaration if the next character is (
-        if self.current_token() is not None and self.current_token().value == "(":
-            self.parse_function()
-        # Parse a variable declaration
+        if identifier is not None and identifier.type == "T_IDENTIFIER":
+            name_token = self.advance_token()
+
+            if self.current_token() is not None and self.current_token().value == "(":
+                declaration = ParseTreeNode("FnDecl:", line)
+                declaration.add_child(ParseTreeNode(f"(return type) Type: {token.value}"))
+                declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
+                self.parse_function(declaration)
+
+            else:
+                declaration = ParseTreeNode("VarDecl:", line)
+                declaration.add_child(ParseTreeNode(f"Type: {token.value}"))
+                declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
+                while self.current_token() is not None and self.current_token().value == ",":
+                    self.advance_token()
+
+                    name_token = self.match_token("T_IDENTIFIER")
+                    if name_token is None:
+                        self.syntax_error()
+
+                    declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
+                self.expect_value(";")
         else:
-            # Token type cannot be void
-            if token_type.type == "T_Void":
-                self.syntax_error()
+            self.syntax_error()
 
-            # Parse multiple variable definitions
-            while self.current_token() is not None and self.current_token().value == ",":
-                self.advance_token()
-
-                if not self.match_token("T_IDENTIFIER"):
-                    self.syntax_error()
-
-            # Check for closing semicolon
-            if self.current_token() is None or self.current_token().value != ";":
-                self.syntax_error()
-
-            # Consume semicolon and finish parsing the variable declaration
-            self.advance_token()
+        return declaration
 
     # Parse function declaration
-    def parse_function(self):
+    def parse_function(self, declaration):
         # Consume opening parenthesis
         self.advance_token()
 
-        # Check for parameters
+        # Parse parameters
         if self.current_token() is not None and self.current_token().value != ")":
-            # Begin parsing one or more parameters
             while True:
-                token = self.current_token()
+                type_token = self.current_token()
 
-                # Check for valid token type, then consume it
-                if token is None or token.type not in {
+                # Check for valid parameter type
+                if type_token is None or type_token.type not in {
                     "T_Int", "T_Double", "T_String", "T_Bool"
                 }:
                     self.syntax_error()
 
                 self.advance_token()
 
-                # Check for parameter identifier name
-                if not self.match_token("T_IDENTIFIER"):
+                # Check for parameter identifier
+                name_token = self.match_token("T_IDENTIFIER")
+
+                if name_token is None:
                     self.syntax_error()
 
-                # Check for comma, indicating another parameter, else break from the loop
+                # Create parameter node
+                parameter = ParseTreeNode("(formals) VarDecl:")
+                parameter.add_child(ParseTreeNode(f"Type: {type_token.value}"))
+                parameter.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
+                declaration.add_child(parameter)
+
+                # Check for another parameter
                 if self.current_token() is None or self.current_token().value != ",":
                     break
 
-                # Consume comma
                 self.advance_token()
 
-        # Check for closing parenthesis, then consume it
+        # Check for closing parenthesis
         if self.current_token() is None or self.current_token().value != ")":
             self.syntax_error()
+
         self.advance_token()
 
         # Parse function body
-        self.parse_block()
+        body = self.parse_block()
+        body.label = "(body) StmtBlock:"
+        declaration.add_child(body)
 
     # Parse function body enclosed in curly braces
     def parse_block(self):
@@ -126,6 +166,8 @@ class Parser:
         if self.current_token() is None:
             self.syntax_error()
         self.advance_token()
+
+        return ParseTreeNode("StmtBlock:")
 
     # Parse local variable declarations
     def parse_variable_declaration(self):
@@ -483,6 +525,7 @@ def main():
 
     try:
         parser.parse_program()
+        parser.root.print_tree()
     except SyntaxError:
         parser.report_syntax_error()
 
