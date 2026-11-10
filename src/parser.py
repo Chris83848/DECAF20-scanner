@@ -265,7 +265,9 @@ class Parser:
 
             # Parse return expression
             if self.current_token() is not None and self.current_token().value != ";":
-                self.parse_expression()
+                expression = self.parse_expression()
+                if expression is not None:
+                    statement.add_child(expression)
 
             # Consume return semicolon
             self.expect_value(";")
@@ -278,7 +280,8 @@ class Parser:
 
             # Consume the print keyword
             self.advance_token()
-            self.parse_call_arguments()
+            arguments = self.parse_call_arguments()
+            statement.add_child(arguments)
             self.expect_value(";")
 
             return statement
@@ -326,7 +329,9 @@ class Parser:
             statement.add_child(ParseTreeNode(f"Operator: {operator}"))
 
             # Parse rest of expression
-            self.parse_expression()
+            expression = self.parse_expression()
+            if expression is not None:
+                statement.add_child(expression)
             self.expect_value(";")
             return statement
 
@@ -385,12 +390,13 @@ class Parser:
     # Parse expression statements
     def parse_expression(self, min_precedence=1):
         # Parse the first operand
-        self.parse_unary()
+        left = self.parse_unary()
 
         # Parse one or more operators
         while self.current_token() is not None:
             # Match operator with precedence value
-            operator = self.current_token().value
+            operator_token = self.current_token()
+            operator = operator_token.value
             precedence = PRECEDENCE.get(operator, 0)
 
             # Decide if precedence meets current precedence level
@@ -399,7 +405,35 @@ class Parser:
 
             # Consume operator and use recursion for parsing next level of precedence
             self.advance_token()
-            self.parse_expression(precedence + 1)
+            right = self.parse_expression(precedence + 1)
+
+            # Find expression type
+            if operator in {"&&", "||"}:
+                label = "LogicalExpr:"
+            elif operator in {"==", "!="}:
+                label = "EqualityExpr:"
+            elif operator in {"<", "<=", ">", ">="}:
+                label = "RelationalExpr:"
+            else:
+                label = "ArithmeticExpr:"
+
+            # Create the expression node
+            expression = ParseTreeNode(label, operator_token.line)
+
+            # Add left side
+            if left is not None:
+                expression.add_child(left)
+
+            # Add operator
+            expression.add_child(ParseTreeNode(f"Operator: {operator}"))
+
+            # Add right side
+            if right is not None:
+                expression.add_child(right)
+
+            left = expression
+
+        return left
 
     # Parse unary operators
     def parse_unary(self):
@@ -408,9 +442,18 @@ class Parser:
         # Check for operators in front of operand to consume and recursively parse, otherwise parse primary expression
         if token is not None and token.value in {"-", "!"}:
             self.advance_token()
-            self.parse_unary()
+            operand = self.parse_unary()
+
+            # Create the unary expression node
+            expression = ParseTreeNode("UnaryExpr:", token.line)
+            expression.add_child(ParseTreeNode(f"Operator: {token.value}"))
+
+            if operand is not None:
+                expression.add_child(operand)
+
+            return expression
         else:
-            self.parse_primary()
+            return self.parse_primary()
 
     # Parse primary expressions
     def parse_primary(self):
@@ -423,14 +466,15 @@ class Parser:
         # Handle expressions within parenthesis
         if token.value == "(":
             self.advance_token()
-            self.parse_expression()
+            expression = self.parse_expression()
             self.expect_value(")")
-            return
+            return expression
 
         # Handle constant values
         if token.type in {"T_IntConstant", "T_BoolConstant", "T_StringConstant"}:
             self.advance_token()
-            return
+            constant = ParseTreeNode(f"Constant: {token.value}", token.line)
+            return constant
 
         # Handle identifiers and print statements
         if token.type in {"T_IDENTIFIER", "T_Print"}:
@@ -438,34 +482,58 @@ class Parser:
 
             # Check for array
             if self.current_token() is not None and self.current_token().value == "[":
+                field_access = ParseTreeNode("FieldAccess:", token.line)
+                field_access.add_child(ParseTreeNode(f"Identifier: {token.value}", token.line))
+
                 self.advance_token()
-                self.parse_expression()
+                index = self.parse_expression()
+                field_access.add_child(index)
                 self.expect_value("]")
-                return
+
+                return field_access
 
             # Handle function calls
             if self.current_token() is not None and self.current_token().value == "(":
-                self.parse_call_arguments()
+                call = ParseTreeNode(f"Call: {token.value}", token.line)
+                arguments = self.parse_call_arguments()
+                call.add_child(arguments)
+                return call
 
-            return
+            field_access = ParseTreeNode("FieldAccess:", token.line)
+            field_access.add_child(ParseTreeNode(f"Identifier: {token.value}", token.line))
+
+            return field_access
 
         self.syntax_error()
 
     # Parse argument list of function calls
     def parse_call_arguments(self):
+        # Create the argument list node
+        arguments = ParseTreeNode("(args)")
+
+        # Consume opening parenthesis
         self.expect_value("(")
 
         # Check if arguments exist
         if self.current_token() is not None and self.current_token().value != ")":
             # Parse first argument
-            self.parse_expression()
+            expression = self.parse_expression()
+
+            if expression is not None:
+                arguments.add_child(expression)
 
             # Parse additional arguments
             while self.current_token() is not None and self.current_token().value == ",":
                 self.advance_token()
-                self.parse_expression()
+                expression = self.parse_expression()
 
+                if expression is not None:
+                    arguments.add_child(expression)
+
+        # Consume closing parenthesis
         self.expect_value(")")
+
+        return arguments
 
     # Check token value type, then consume it
     def expect_value(self, expected_value):
