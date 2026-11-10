@@ -164,7 +164,9 @@ class Parser:
 
         # Parse statements until closing brace is reached
         while self.current_token() is not None and self.current_token().value != "}":
-            self.parse_statement()
+            statement = self.parse_statement()
+            if statement is not None:
+                block.add_child(statement)
 
         # Check for missing closing brace, then consume it
         if self.current_token() is None:
@@ -243,12 +245,21 @@ class Parser:
 
         # Consume break and continue statements, indicated by token type
         if token.type in {"T_Break", "T_Continue"}:
+            if token.type == "T_Break":
+                statement = ParseTreeNode("BreakStmt:", token.line)
+            else:
+                statement = ParseTreeNode("ContinueStmt:", token.line)
+
             self.advance_token()
             self.expect_value(";")
-            return
+
+            return statement
 
         # Parse return statements, indicated by token type
         if token.type == "T_Return":
+            # Create the return statement node
+            statement = ParseTreeNode("ReturnStmt:", token.line)
+
             # Consume return keyword
             self.advance_token()
 
@@ -258,10 +269,22 @@ class Parser:
 
             # Consume return semicolon
             self.expect_value(";")
-            return
+            return statement
+
+        # Parse print statements, indicated by token type
+        if token.type == "T_Print":
+            # Create the print statement node
+            statement = ParseTreeNode("PrintStmt:", token.line)
+
+            # Consume the print keyword
+            self.advance_token()
+            self.parse_call_arguments()
+            self.expect_value(";")
+
+            return statement
 
         # Parse identifier and print statements, indicated by token type
-        if token.type in {"T_IDENTIFIER", "T_Print"}:
+        if token.type in {"T_IDENTIFIER"}:
             # Consume keyword
             self.advance_token()
 
