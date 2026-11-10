@@ -147,6 +147,9 @@ class Parser:
 
     # Parse function body enclosed in curly braces
     def parse_block(self):
+        # Create the statement block node
+        block = ParseTreeNode("StmtBlock:")
+
         # Check for opening brace, then consume it
         if self.current_token() is None or self.current_token().value != "{":
             self.syntax_error()
@@ -156,7 +159,8 @@ class Parser:
         while self.current_token() is not None and self.current_token().type in {
             "T_Int", "T_Double", "T_String", "T_Bool"
         }:
-            self.parse_variable_declaration()
+            declaration = self.parse_variable_declaration()
+            block.add_child(declaration)
 
         # Parse statements until closing brace is reached
         while self.current_token() is not None and self.current_token().value != "}":
@@ -167,18 +171,27 @@ class Parser:
             self.syntax_error()
         self.advance_token()
 
-        return ParseTreeNode("StmtBlock:")
+        return block
 
     # Parse local variable declarations
     def parse_variable_declaration(self):
         # Consume type token found in parse_block
+        type_token = self.current_token()
         self.advance_token()
+
+        # Create the variable declaration node
+        declaration = ParseTreeNode("VarDecl:", type_token.line)
+        declaration.add_child(ParseTreeNode(f"Type: {type_token.value}"))
 
         # Identify one or multiple variables
         while True:
             # Check for correct identifier type
-            if not self.match_token("T_IDENTIFIER"):
+            name_token = self.match_token("T_IDENTIFIER")
+
+            if name_token is None:
                 self.syntax_error()
+
+            declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
 
             # Check for array declaration
             if self.current_token() is not None and self.current_token().value == "[":
@@ -196,6 +209,8 @@ class Parser:
 
         # Check for closing semicolon
         self.expect_value(";")
+
+        return declaration
 
     # Parse different kinds of statements
     def parse_statement(self):
