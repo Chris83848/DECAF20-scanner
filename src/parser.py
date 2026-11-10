@@ -283,10 +283,10 @@ class Parser:
 
             return statement
 
-        # Parse identifier and print statements, indicated by token type
-        if token.type in {"T_IDENTIFIER"}:
+        # Parse identifier statements, indicated by token type
+        if token.type == "T_IDENTIFIER":
             # Consume keyword
-            self.advance_token()
+            name_token = self.advance_token()
 
             # Parse function call
             if self.current_token() is not None and self.current_token().value == "(":
@@ -294,11 +294,20 @@ class Parser:
                 self.expect_value(";")
                 return
 
+            # Create the assignment expression node
+            statement = ParseTreeNode("AssignExpr:", token.line)
+
+            # Create the field access node
+            field_access = ParseTreeNode("FieldAccess:")
+            field_access.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
             # Check for array
             if self.current_token() is not None and self.current_token().value == "[":
                 self.advance_token()
                 self.parse_expression()
                 self.expect_value("]")
+
+            statement.add_child(field_access)
 
             # Check for assignment operator, then consume it
             if self.current_token() is None or self.current_token().value not in {"=", "+", "-"}:
@@ -311,11 +320,15 @@ class Parser:
                     self.syntax_error()
 
                 self.advance_token()
+                operator += "="
+
+            # Add the assignment operator node
+            statement.add_child(ParseTreeNode(f"Operator: {operator}"))
 
             # Parse rest of expression
             self.parse_expression()
             self.expect_value(";")
-            return
+            return statement
 
         self.syntax_error()
 
