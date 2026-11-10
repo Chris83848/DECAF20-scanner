@@ -418,10 +418,40 @@ class Parser:
             assignment.add_child(expression)
         statement.add_child(assignment)
 
-        self.expect_value(",")
+        self.expect_value(";")
         condition = self.parse_expression()
         if condition is not None:
             statement.add_child(condition)
+
+        self.expect_value(";")
+        name_token = self.match_token("T_IDENTIFIER")
+        if name_token is None:
+            self.syntax_error()
+
+        update = ParseTreeNode("AssignExpr:", name_token.line)
+
+        field_access = ParseTreeNode("FieldAccess:")
+        field_access.add_child((ParseTreeNode(f"Identifier: {name_token.value}", name_token.line)))
+        update.add_child(field_access)
+
+        if self.current_token() is None or self.current_token().value not in {"=", "+", "-"}:
+            self.syntax_error()
+
+        operator = self.advance_token().value
+
+        if operator in {"+", "-"}:
+            if self.current_token() is None or self.current_token().value != "=":
+                self.syntax_error()
+            self.advance_token()
+            operator += "="
+
+        update.add_child(ParseTreeNode(f"Operator: {operator}"))
+
+        expression = self.parse_expression()
+        if expression is not None:
+            update.add_child(expression)
+
+        statement.add_child(update)
 
         self.expect_value(")")
 
