@@ -225,8 +225,7 @@ class Parser:
 
         # Parse block statement based on opening curly brace
         if token.value == "{":
-            self.parse_block()
-            return
+            return self.parse_block()
 
         # Parse If statement, indicated by token type
         if token.type == "T_If":
