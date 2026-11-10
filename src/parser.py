@@ -238,8 +238,7 @@ class Parser:
 
         # Parse For statement, indicated by token type
         if token.type == "T_For":
-            self.parse_for()
-            return
+            return self.parse_for()
 
         # Consume break and continue statements, indicated by token type
         if token.type in {"T_Break", "T_Continue"}:
@@ -389,22 +388,48 @@ class Parser:
 
     # Parse For statements
     def parse_for(self):
-        # Consume keyword
+        token = self.current_token()
+
+        # Create the for statement node
+        statement = ParseTreeNode("ForStmt:", token.line)
+
+        # Consume keyword and opening parenthesis
         self.advance_token()
+        self.expect_value("(")
 
         # Check for identifier
-        if not self.match_token("T_IDENTIFIER"):
+        name_token = self.match_token("T_IDENTIFIER")
+        if name_token is None:
             self.syntax_error()
+
+        # Create assignment expression
+        assignment = ParseTreeNode("AssignExpr:", name_token.line)
+
+        field_access = ParseTreeNode("FieldAccess:")
+        field_access.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+        assignment.add_child(field_access)
 
         # Require equals sign and comma for proper statement declaration
         self.expect_value("=")
-        self.parse_expression()
+        assignment.add_child(ParseTreeNode("Operator: ="))
+
+        expression = self.parse_expression()
+        if expression is not None:
+            assignment.add_child(expression)
+        statement.add_child(assignment)
 
         self.expect_value(",")
-        self.parse_expression()
+        condition = self.parse_expression()
+        if condition is not None:
+            statement.add_child(condition)
+
+        self.expect_value(")")
 
         # Parse function body
-        self.parse_block()
+        body = self.parse_block()
+        statement.add_child(body)
+
+        return statement
 
     # Parse expression statements
     def parse_expression(self, min_precedence=1):
