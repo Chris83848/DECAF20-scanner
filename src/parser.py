@@ -234,8 +234,7 @@ class Parser:
 
         # Parse While statement, indicated by token type
         if token.type == "T_While":
-            self.parse_while()
-            return
+            return self.parse_while()
 
         # Parse For statement, indicated by token type
         if token.type == "T_For":
@@ -367,16 +366,26 @@ class Parser:
 
     # Parse While statements
     def parse_while(self):
+        token = self.current_token()
+
+        # Create the while statement node
+        statement = ParseTreeNode("WhileStmt:", token.line)
+
         # Consume keyword
         self.advance_token()
 
         # Check for opening and closing parenthesis, and parse expression inside
         self.expect_value("(")
-        self.parse_expression()
+        condition = self.parse_expression()
+        if condition is not None:
+            statement.add_child(condition)
         self.expect_value(")")
 
         # Parse function body
-        self.parse_block()
+        body = self.parse_block()
+        statement.add_child(body)
+
+        return statement
 
     # Parse For statements
     def parse_for(self):
