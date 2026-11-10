@@ -351,13 +351,23 @@ class Parser:
         self.expect_value(")")
 
         # Parse body
-        body = self.parse_block()
+        if self.current_token() is not None and self.current_token().value == "{":
+            body = self.parse_block()
+        else:
+            body = ParseTreeNode("StmtBlock:")
+            body.add_child(self.parse_statement())
         statement.add_child(body)
 
         # Check for else statement and parse it
         if self.current_token() is not None and self.current_token().type == "T_Else":
             self.advance_token()
-            else_body = self.parse_block()
+
+            if self.current_token() is not None and self.current_token().value == "{":
+                else_body = self.parse_block()
+            else:
+                else_body = ParseTreeNode("StmtBlock:")
+                else_body.add_child(self.parse_statement())
+
             statement.add_child(else_body)
 
         return statement
@@ -380,7 +390,12 @@ class Parser:
         self.expect_value(")")
 
         # Parse function body
-        body = self.parse_block()
+        if self.current_token() is not None and self.current_token().value == "{":
+            body = self.parse_block()
+        else:
+            body = ParseTreeNode("StmtBlock:")
+            body.add_child(self.parse_statement())
+
         statement.add_child(body)
 
         return statement
