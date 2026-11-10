@@ -82,14 +82,26 @@ class Parser:
                 declaration.add_child(ParseTreeNode(f"Type: {token.value}"))
                 declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
 
+                if self.current_token() is not None and self.current_token().value == "[":
+                    self.advance_token()
+                    if not self.match_token("T_IntConstant"):
+                        self.syntax_error()
+                    self.expect_value("]")
+
                 while self.current_token() is not None and self.current_token().value == ",":
                     self.advance_token()
-
                     name_token = self.match_token("T_IDENTIFIER")
+
                     if name_token is None:
                         self.syntax_error()
 
                     declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
+                    if self.current_token() is not None and self.current_token().value == "[":
+                        self.advance_token()
+                        if not self.match_token("T_IntConstant"):
+                            self.syntax_error()
+                        self.expect_value("]")
 
                 self.expect_value(";")
         else:
@@ -272,12 +284,16 @@ class Parser:
         # Parse print statements, indicated by token type
         if token.type == "T_Print":
             # Create the print statement node
-            statement = ParseTreeNode("PrintStmt:", token.line)
+            statement = ParseTreeNode("PrintStmt:")
 
             # Consume the print keyword
             self.advance_token()
             arguments = self.parse_call_arguments()
-            statement.add_child(arguments)
+
+            for argument in arguments.children:
+                argument.label = f"(args) {argument.label}"
+                statement.add_child(argument)
+
             self.expect_value(";")
 
             return statement
@@ -289,9 +305,14 @@ class Parser:
 
             # Parse function call
             if self.current_token() is not None and self.current_token().value == "(":
-                call = ParseTreeNode(f"Call: {name_token.value}", name_token.line)
+                call = ParseTreeNode("Call:", name_token.line)
+                call.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
+
                 arguments = self.parse_call_arguments()
-                call.add_child(arguments)
+                for argument in arguments.children:
+                    argument.label = f"(args) {argument.label}"
+                    call.add_child(argument)
+
                 self.expect_value(";")
                 return call
 
@@ -305,7 +326,10 @@ class Parser:
             # Check for array
             if self.current_token() is not None and self.current_token().value == "[":
                 self.advance_token()
-                self.parse_expression()
+                index = self.parse_expression()
+                if index is not None:
+                    field_access.add_child(index)
+
                 self.expect_value("]")
 
             statement.add_child(field_access)
@@ -313,7 +337,8 @@ class Parser:
             # Check for assignment operator, then consume it
             if self.current_token() is None or self.current_token().value not in {"=", "+", "-"}:
                 self.syntax_error()
-            operator = self.advance_token().value
+            operator_token = self.advance_token()
+            operator = operator_token.value
 
             # Check for compound operation
             if operator in {"+", "-"}:
@@ -324,7 +349,7 @@ class Parser:
                 operator += "="
 
             # Add the assignment operator node
-            statement.add_child(ParseTreeNode(f"Operator: {operator}"))
+            statement.add_child(ParseTreeNode(f"Operator: {operator}", operator_token.line))
 
             # Parse rest of expression
             expression = self.parse_expression()
@@ -515,7 +540,7 @@ class Parser:
                 expression.add_child(left)
 
             # Add operator
-            expression.add_child(ParseTreeNode(f"Operator: {operator}"))
+            expression.add_child(ParseTreeNode(f"Operator: {operator}", operator_token.line))
 
             # Add right side
             if right is not None:
@@ -563,7 +588,15 @@ class Parser:
         # Handle constant values
         if token.type in {"T_IntConstant", "T_BoolConstant", "T_StringConstant"}:
             self.advance_token()
-            constant = ParseTreeNode(f"Constant: {token.value}", token.line)
+
+            if token.type == "T_IntConstant":
+                label = "IntConstant"
+            elif token.type == "T_BoolConstant":
+                label = "BoolConstant"
+            else:
+                label = "StringConstant"
+
+            constant = ParseTreeNode(f"{label}: {token.value}", token.line)
             return constant
 
         # Handle identifiers and print statements
@@ -584,9 +617,15 @@ class Parser:
 
             # Handle function calls
             if self.current_token() is not None and self.current_token().value == "(":
-                call = ParseTreeNode(f"Call: {token.value}", token.line)
+                call = ParseTreeNode("Call:", token.line)
+                call.add_child(ParseTreeNode(f"Identifier: {token.value}", token.line))
+
                 arguments = self.parse_call_arguments()
-                call.add_child(arguments)
+
+                for argument in arguments.children:
+                    argument.label = f"(args) {argument.label}"
+                    call.add_child(argument)
+
                 return call
 
             field_access = ParseTreeNode("FieldAccess:", token.line)
