@@ -11,15 +11,18 @@ PRECEDENCE = {
     "*": 6, "/": 6, "%": 6
 }
 
+# Initialize ParseTreeNode class to build parse tree with children representing different function statements
 class ParseTreeNode:
     def __init__(self, label, line=None):
         self.label = label
         self.line = line
         self.children = []
 
+    # Add child to tree
     def add_child(self, child):
         self.children.append(child)
 
+    # Print out structured tree
     def print_tree(self, depth=0):
         indentation = "\t" * depth
 
@@ -70,13 +73,14 @@ class Parser:
         if identifier is not None and identifier.type == "T_IDENTIFIER":
             name_token = self.advance_token()
 
+            # Create the function declaration node
             if self.current_token() is not None and self.current_token().value == "(":
                 declaration = ParseTreeNode("FnDecl:", line)
                 declaration.add_child(ParseTreeNode(f"(return type) Type: {token.value}"))
                 declaration.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
 
                 self.parse_function(declaration)
-
+            # Create the variable declaration node
             else:
                 declaration = ParseTreeNode("VarDecl:", line)
                 declaration.add_child(ParseTreeNode(f"Type: {token.value}"))
@@ -133,7 +137,7 @@ class Parser:
                 if name_token is None:
                     self.syntax_error()
 
-                # Create parameter node
+                # Create the parameter node
                 parameter = ParseTreeNode("(formals) VarDecl:")
                 parameter.add_child(ParseTreeNode(f"Type: {type_token.value}"))
                 parameter.add_child(ParseTreeNode(f"Identifier: {name_token.value}", name_token.line))
@@ -361,6 +365,7 @@ class Parser:
             if expression is not None:
                 statement.add_child(expression)
             self.expect_value(";")
+
             return statement
 
         self.syntax_error()
@@ -458,6 +463,7 @@ class Parser:
         self.expect_value("=")
         assignment.add_child(ParseTreeNode("Operator: ="))
 
+        # Parse full expression
         expression = self.parse_expression()
         if expression is not None:
             assignment.add_child(expression)
@@ -512,7 +518,7 @@ class Parser:
 
         return statement
 
-    # Parse expression statements
+    # Parse expression statements using precedence order
     def parse_expression(self, min_precedence=1):
         # Parse the first operand
         left = self.parse_unary()
@@ -560,7 +566,7 @@ class Parser:
 
         return left
 
-    # Parse unary operators
+    # Parse unary operators through recursion
     def parse_unary(self):
         token = self.current_token()
 
