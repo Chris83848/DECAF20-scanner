@@ -275,6 +275,8 @@ class Parser:
             if self.current_token() is not None and self.current_token().value != ";":
                 expression = self.parse_expression()
                 if expression is not None:
+                    if expression.label.startswith(("IntConstant:", "BoolConstant:", "StringConstant:")):
+                        expression.label = f"(args) {expression.label}"
                     statement.add_child(expression)
 
             # Consume return semicolon
@@ -310,7 +312,10 @@ class Parser:
 
                 arguments = self.parse_call_arguments()
                 for argument in arguments.children:
-                    argument.label = f"(args) {argument.label}"
+                    if argument.label.startswith(("IntConstant:", "BoolConstant:", "StringConstant:")):
+                        argument.label = f"(args) {argument.label}"
+                    else:
+                        argument.label = f"(actuals) {argument.label}"
                     call.add_child(argument)
 
                 self.expect_value(";")
@@ -374,6 +379,7 @@ class Parser:
         self.expect_value("(")
         condition = self.parse_expression()
         if condition is not None:
+            condition.label = f"(test) {condition.label}"
             statement.add_child(condition)
         self.expect_value(")")
 
@@ -381,8 +387,7 @@ class Parser:
         if self.current_token() is not None and self.current_token().value == "{":
             body = self.parse_block()
         else:
-            body = ParseTreeNode("StmtBlock:")
-            body.add_child(self.parse_statement())
+            body = self.parse_statement()
         statement.add_child(body)
 
         # Check for else statement and parse it
@@ -392,8 +397,7 @@ class Parser:
             if self.current_token() is not None and self.current_token().value == "{":
                 else_body = self.parse_block()
             else:
-                else_body = ParseTreeNode("StmtBlock:")
-                else_body.add_child(self.parse_statement())
+                else_body = self.parse_statement()
 
             statement.add_child(else_body)
 
@@ -457,11 +461,13 @@ class Parser:
         expression = self.parse_expression()
         if expression is not None:
             assignment.add_child(expression)
+        assignment.label = f"(init) {assignment.label}"
         statement.add_child(assignment)
 
         self.expect_value(";")
         condition = self.parse_expression()
         if condition is not None:
+            condition.label = f"(test) {condition.label}"
             statement.add_child(condition)
 
         self.expect_value(";")
@@ -492,12 +498,16 @@ class Parser:
         if expression is not None:
             update.add_child(expression)
 
+        update.label = f"(step) {update.label}"
         statement.add_child(update)
 
         self.expect_value(")")
 
         # Parse function body
-        body = self.parse_block()
+        if self.current_token() is not None and self.current_token().value == "{":
+            body = self.parse_block()
+        else:
+            body = self.parse_statement()
         statement.add_child(body)
 
         return statement
@@ -560,7 +570,10 @@ class Parser:
             operand = self.parse_unary()
 
             # Create the unary expression node
-            expression = ParseTreeNode("UnaryExpr:", token.line)
+            if token.value == "!":
+                expression = ParseTreeNode("LogicalExpr:", token.line)
+            else:
+                expression = ParseTreeNode("UnaryExpr:", token.line)
             expression.add_child(ParseTreeNode(f"Operator: {token.value}"))
 
             if operand is not None:
@@ -623,7 +636,10 @@ class Parser:
                 arguments = self.parse_call_arguments()
 
                 for argument in arguments.children:
-                    argument.label = f"(args) {argument.label}"
+                    if argument.label.startswith(("IntConstant:", "BoolConstant:", "StringConstant:")):
+                        argument.label = f"(args) {argument.label}"
+                    else:
+                        argument.label = f"(actuals) {argument.label}"
                     call.add_child(argument)
 
                 return call
